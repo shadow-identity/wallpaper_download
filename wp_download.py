@@ -7,9 +7,6 @@ http://www.australiangeographic.com.au and store it to local storage
 import urllib2, logging
 from bs4 import BeautifulSoup
 
-if __debug__: logging.basicConfig(level = logging.DEBUG) 
-
-
 def getimg(url):
     """ Open wallpaper's page, find url of hires picture
     in <div id="content"> --> children <p><a>. 
@@ -49,21 +46,20 @@ def download(url, dest):
     return
     
 
-def main():
-    links = 0
-    site_prefix = 'http://www.australiangeographic.com.au'
-    url_gallery = site_prefix + '/journal/wallpaper/'
-    soup = BeautifulSoup(urllib2.urlopen(url_gallery))
-    # gonna find links to wallpaper's pages
-    for link in soup.find('table').find_all('a'):
-        link_str = link.get('href')
-        # if url is not absolute
-        if not link_str.startswith('http'):
-            link_str = 'http://www.australiangeographic.com.au' + link_str
-        getimg(link_str)
-        links += 1
+if __debug__: logging.basicConfig(level = logging.DEBUG)
+links = 0
+site_prefix = 'http://www.australiangeographic.com.au'
+url_gallery = site_prefix + '/journal/wallpaper/'
+soup = BeautifulSoup(urllib2.urlopen(url_gallery))
+# gonna find links to wallpaper's pages
+for link in soup.find('table').find_all('a'):
+    link_str = link.get('href')
+    # if url is not absolute
+    if not link_str.startswith('http'):
+        link_str = 'http://www.australiangeographic.com.au' + link_str
+    getimg(link_str)
+    links += 1
 
-    logging.info('links to img pages found: %d', links)
+logging.info('links to img pages found: %d', links)
 
 
-main()
