@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 site_prefix = 'http://www.australiangeographic.com.au'
 url_gallery = site_prefix + '/journal/wallpaper/'
 path_to_file = '/home/nedr/Изображения/wp/au/temp/'
+file_extention = '.jpg'
 
 def getimg(url, file_name):
     """ Open wallpaper's page, find url of hi-res picture
@@ -59,10 +60,10 @@ for image_block in soup.find('table').find_all('td'):
     link_str = image_block.find('a').get('href')
     # if url of page is not absolute, make that
     if not link_str.startswith('http'):
-        link_str = 'http://www.australiangeographic.com.au' + link_str
+        link_str = site_prefix + link_str
     # descriprion of image we will use as a name of file
     img_name = [string for string in image_block.find_all('p')[1].strings]
-    getimg(link_str, img_name[0] + '.jpg')
+    getimg(link_str, img_name[0] + file_extention)
     links += 1
 
 logging.info('links to img pages found: %d', links)
