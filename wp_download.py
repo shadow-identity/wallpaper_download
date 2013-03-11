@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-""" Downloads wallpapers in full resolution from 
+""" Downloads wallpapers in full resolution from
 http://www.australiangeographic.com.au and store it to local storage
 (see local_path variable). """
 
 
-import urllib2, logging
+import urllib2
+import logging
 from bs4 import BeautifulSoup
 
 site_prefix = 'http://www.australiangeographic.com.au'
@@ -12,9 +13,10 @@ url_gallery = site_prefix + '/journal/wallpaper/'
 path_to_file = '/home/nedr/Изображения/wp/au/temp/'
 file_extention = '.jpg'
 
+
 def getimg(url, file_name):
-    """ Open wallpaper's page, find url of hi-res picture
-    in <div id="content"> --> children <p><a>. 
+    """Open wallpaper's page, find url of hi-res picture
+    in <div id="content"> --> children <p><a>.
     Get URL from <a href="...">. """
     # where to save downloaded wallpapers
     logging.debug('opening %s', url)
@@ -31,12 +33,13 @@ def getimg(url, file_name):
         logging.error('URLError while parsing %s', url)
     return
 
+
 def download(url, dest):
-    """Download file from url and save it as dest. """
+    """Download file from url and save it as dest."""
     try:
         wallpaper_net = urllib2.urlopen(url)
         content = wallpaper_net.read()
-        with open(dest,'wb') as wallpaper_file:
+        with open(dest, 'wb') as wallpaper_file:
             wallpaper_file.write(content)
     except urllib2.URLError:
         logging.error('ERLError while saving img from %s', url)
@@ -45,18 +48,19 @@ def download(url, dest):
     else:
         wallpaper_net.close
     return
-    
 
-if __debug__: 
-    logging.basicConfig(level = logging.DEBUG)
+if __debug__:
+    logging.basicConfig(level=logging.DEBUG)
 else:
-    logging.basicConfig(level = logging.INFO)
+    logging.basicConfig(level=logging.INFO)
 links = 0
 soup = BeautifulSoup(urllib2.urlopen(url_gallery))
 # gonna find links to wallpaper's pages
 # at first we'll find table cell (<td>) with tumbnail of wallpaper
+print soup.find('table')
+#TODO: what's wrong with table???
 for image_block in soup.find('table').find_all('td'):
-    # finding link to wallpaper page in table cell 
+    # finding link to wallpaper page in table cell
     link_str = image_block.find('a').get('href')
     # if url of page is not absolute, make that
     if not link_str.startswith('http'):
@@ -67,5 +71,3 @@ for image_block in soup.find('table').find_all('td'):
     links += 1
 
 logging.info('links to img pages found: %d', links)
-
-
