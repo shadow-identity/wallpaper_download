@@ -15,15 +15,20 @@ doc = lxml.html.document_fromstring(doc_file.read())
 
 class Image():
     def get_data_from_gallery(self, image):
-        self.prewiev_url = image.attrib["href"]
+        #TODO: remove <cr>'s
+        self.prewiev_url = image[0][0].attrib['href']
         if not self.prewiev_url.startswith('http'):
             self.prewiev_url = site_prefix + self.prewiev_url
+        self.author = image[1][1].text
+        #TODO: remove author if None
+        self.name = image[1].text
 
 
 page = Image()
 
-for image in doc.xpath('//*[@id="content"]/table/tr/td/div/p/a'):
-    page.get_prewiev_url(image)
+for image in doc.xpath('//*[@id="content"]/table/tr/td/div'):
+    page.get_data_from_gallery(image)
+    print page.author, page.name, page.prewiev_url
 
 """doc.xpath('//*[@id="content"]/table/tr/td/div')[0][1][1].text
 'David Bristow'

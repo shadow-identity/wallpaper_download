@@ -57,8 +57,6 @@ links = 0
 soup = BeautifulSoup(urllib2.urlopen(url_gallery))
 # gonna find links to wallpaper's pages
 # at first we'll find table cell (<td>) with tumbnail of wallpaper
-print soup.find('table')
-#TODO: what's wrong with table???
 for image_block in soup.find('table').find_all('td'):
     # finding link to wallpaper page in table cell
     link_str = image_block.find('a').get('href')
