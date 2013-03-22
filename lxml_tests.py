@@ -29,12 +29,12 @@ class Image():
         image -- ElementTree object containing values
 
         """
-        #TODO: remove <cr>'s
         self.prewiev_url = image[0][0].attrib['href']
         if not self.prewiev_url.startswith('http'):
             self.prewiev_url = site_prefix + self.prewiev_url
-        self.author = image[1][1].text
         #TODO: remove author if None
+        self.author = image[1][1].text
+        #TODO: remove <cr>'s inside .name, get another name when None
         self.name = image[1].text.rstrip()
 
     def get_original_image_url(self):
@@ -52,6 +52,7 @@ class Image():
         self.filename = path_to_file + self.name + self.extention
         image_pointer = urllib2.urlopen(self.image_url)
         image = image_pointer.read()
+        #TODO: check, if folder exist
         with open(self.filename, 'wb') as wallpaper_file:
             wallpaper_file.write(image)
         """except urllib2.URLError:
@@ -79,6 +80,9 @@ class Image():
 parser = argparse.ArgumentParser()
 parser.add_argument('-v', '--verbose', help='increase output verbosity',
                     action='store_true')
+parser.add_argument('--path', help='path to save wallpapers')
+args = parser.parse_args()
+print args.path
 
 url = 'http://www.australiangeographic.com.au/journal/wallpaper'
 site_prefix = 'http://www.australiangeographic.com.au'
