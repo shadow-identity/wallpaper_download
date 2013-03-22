@@ -1,12 +1,28 @@
 # -*- coding: utf-8 -*-
-"""Download wallpapers from www.australiangeographic.com.au"""
+"""Download wallpapers from www.australiangeographic.com.au
+Positional argument:
+path -- pathname of destination wallpapers directory
+
+Optional arguments:
+-v, --verbose -- affects both log file and stdout
+
+Output:
+- Image files saves into path directory with addition information about site 
+  and author (if exist) in Exif.Image.Copyright field.
+- Log to stdout
+- Log file wp_download.log (more detailed than log in stdout)
+
+"""
 #TODO: add exceptions
 #TODO: add thumbnail to exif?
 
 import urllib
 import urllib2
 import lxml.html
+import logging
 import argparse
+from os.path import abspath, exists
+from os import mkdir
 
 
 class Image():
@@ -33,7 +49,10 @@ class Image():
         if not self.prewiev_url.startswith('http'):
             self.prewiev_url = site_prefix + self.prewiev_url
         #TODO: remove author if None
-        self.author = image[1][1].text
+        if image[1][1]:
+            self.author = image[1][1].text
+        else:
+            self.author = 'Not present in gallery'
         #TODO: remove <cr>'s inside .name, get another name when None
         self.name = image[1].text.rstrip()
 
@@ -47,12 +66,13 @@ class Image():
         self.extention = '.' + self.image_url.rpartition('.')[2]
 
     def save_image(self):
-        """Download file and save it to destination."""
+        """Get path to save, download file and save it to destination."""
         """try:"""
-        self.filename = path_to_file + self.name + self.extention
+
+        #Calculate full filepath, download image, write it to disk
+        self.filename = args.path + self.name + self.extention
         image_pointer = urllib2.urlopen(self.image_url)
         image = image_pointer.read()
-        #TODO: check, if folder exist
         with open(self.filename, 'wb') as wallpaper_file:
             wallpaper_file.write(image)
         """except urllib2.URLError:
@@ -77,23 +97,47 @@ class Image():
         metadata['Exif.Image.Copyright'] = info_to_exif
         metadata.write()
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-v', '--verbose', help='increase output verbosity',
-                    action='store_true')
-parser.add_argument('--path', help='path to save wallpapers')
-args = parser.parse_args()
-print args.path
-
 url = 'http://www.australiangeographic.com.au/journal/wallpaper'
 site_prefix = 'http://www.australiangeographic.com.au'
-path_to_file = '/home/nedr/progs/wp_download/wp/'
 html = urllib.urlopen(url).read()
 doc = lxml.html.document_fromstring(html)
+
+#Parsing command line arguments
+parser = argparse.ArgumentParser(description=
+    'Download wallpapers from %(url)s'
+    'BSD license. Source: https://bitbucket.org/ambush_k3/wp_download'
+    % locals())
+parser.add_argument('-v', '--verbose',
+    help='increase output verbosity', action='store_true')
+parser.add_argument('path', help='path to save wallpapers')
+args = parser.parse_args()
+
+#Is given path valid?
+if not abspath(args.path):
+    logging.error('Path must be absolute!')
+if not (args.path.endswith('/') or args.path.endswith('\\')):
+    from sys import platform as _platform
+    if _platform.startswith("linux") or _platform == "darwin":
+        args.path = args.path + '/'
+    elif _platform == "win32" or "cygwin":
+        args.path = args.path + '\\'
+
+#Is there this path?
+if not exists(args.path):
+    mkdir(args.path)
+
+#Configuring logger
+if __debug__ or args.verbose:
+    logging.basicConfig(level=logging.DEBUG)
+else:
+    logging.basicConfig(level=logging.INFO)
+
 page = Image()
 for image in doc.xpath('//*[@id="content"]/table/tr/td/div'):
     page.get_data_from_gallery(image)
+    # FIXME: revert to normal state
     print page.name
-    if 'Cormorant' in page.name:
+    if '' in page.name:
         page.get_original_image_url()
         page.save_image()
         page.edit_exif()
