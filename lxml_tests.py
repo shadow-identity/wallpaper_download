@@ -7,7 +7,7 @@ Optional arguments:
 -v, --verbose -- affects both log file and stdout
 
 Output:
-- Image files saves into path directory with addition information about site 
+- Image files saves into path directory with addition information about site
   and author (if exist) in Exif.Image.Copyright field.
 - Log to stdout
 - Log file wp_download.log (more detailed than log in stdout)
@@ -49,12 +49,22 @@ class Image():
         if not self.prewiev_url.startswith('http'):
             self.prewiev_url = site_prefix + self.prewiev_url
         #TODO: remove author if None
-        if image[1][1]:
-            self.author = image[1][1].text
-        else:
-            self.author = 'Not present in gallery'
         #TODO: remove <cr>'s inside .name, get another name when None
         self.name = image[1].text.rstrip()
+        if 'owl' in page.name:
+            print 'len(image) ', len(image)
+            print 'len(image)[1] ', len(image[1])
+            print 'image[1].text', image[1].text
+            print 'image[1].tail', image[1][0].tail
+            print 'image[1][0]', image[1][0].text
+            print 'image[1][1]', image[1][1].text
+            print 'image[1][2]', image[1][2].text
+            print 'image[1][3]', image[1][3].text
+        #Author in last but one element
+        if image[1][len(image[1]) - 2] is not None:
+            self.author = image[1][len(image[1]) - 2].text
+        else:
+            self.author = 'Not present in gallery'
 
     def get_original_image_url(self):
         """Get information from prewiev page, save it in attributes."""
@@ -122,7 +132,7 @@ if not (args.path.endswith('/') or args.path.endswith('\\')):
     elif _platform == "win32" or "cygwin":
         args.path = args.path + '\\'
 
-#Is there this path?
+#Is given path exist?
 if not exists(args.path):
     mkdir(args.path)
 
@@ -137,7 +147,7 @@ for image in doc.xpath('//*[@id="content"]/table/tr/td/div'):
     page.get_data_from_gallery(image)
     # FIXME: revert to normal state
     print page.name
-    if '' in page.name:
+    if 'hkjkj' in page.name:
         page.get_original_image_url()
         page.save_image()
         page.edit_exif()
