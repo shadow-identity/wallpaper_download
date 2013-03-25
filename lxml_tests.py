@@ -48,21 +48,32 @@ class Image():
         self.prewiev_url = image[0][0].attrib['href']
         if not self.prewiev_url.startswith('http'):
             self.prewiev_url = site_prefix + self.prewiev_url
-        #TODO: remove author if None
-        #TODO: remove <cr>'s inside .name, get another name when None
-        self.name = image[1].text.rstrip()
-        if 'owl' in page.name:
-            print 'len(image) ', len(image)
-            print 'len(image)[1] ', len(image[1])
-            print 'image[1].text', image[1].text
-            print 'image[1].tail', image[1][0].tail
-            print 'image[1][0]', image[1][0].text
-            print 'image[1][1]', image[1][1].text
-            print 'image[1][2]', image[1][2].text
-            print 'image[1][3]', image[1][3].text
+
+        description = image[1]
+        #TODO: remove <cr>'s inside .name (split strings)
+        #TODO: get another name when None (from preview url)
+        if description.text is not None:
+            self.name = description.text
+        #hack: usually <p> contains 3 tags. If more, description is 2-string
+        #if len(description) > 3:
+        #number_of_tags = len(description)
+        if len(description) > 3:
+            for element in description[:-2]:
+                if element.tag == 'em':
+                    self.name = self.name + element.text
+                    if element.tail is not None:
+                        self.name = self.name + element.tail
+                elif element.tag == 'br' and element.tail is not None:
+                    self.name = self.name + element.tail
+        self.name = self.name.strip()
+
+        if 'Dingo' in self.name:
+            print self.name
+
         #Author in last but one element
-        if image[1][len(image[1]) - 2] is not None:
-            self.author = image[1][len(image[1]) - 2].text
+        #TODO: remove author if None
+        if description[len(description) - 2] is not None:
+            self.author = description[len(description) - 2].text
         else:
             self.author = 'Not present in gallery'
 
@@ -145,8 +156,9 @@ else:
 page = Image()
 for image in doc.xpath('//*[@id="content"]/table/tr/td/div'):
     page.get_data_from_gallery(image)
+    print page.name, page.author
     # FIXME: revert to normal state
-    print page.name
+    #print page.name
     if 'hkjkj' in page.name:
         page.get_original_image_url()
         page.save_image()
