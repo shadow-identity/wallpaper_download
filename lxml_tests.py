@@ -46,36 +46,37 @@ class Image():
 
         """
         self.prewiev_url = image[0][0].attrib['href']
+        #hack: make links absolute if they are not
         if not self.prewiev_url.startswith('http'):
             self.prewiev_url = site_prefix + self.prewiev_url
 
         description = image[1]
-        #TODO: remove <cr>'s inside .name (split strings)
-        #TODO: get another name when None (from preview url)
+        self.name = ''
         if description.text is not None:
             self.name = description.text
-        #hack: usually <p> contains 3 tags. If more, description is 2-string
-        #if len(description) > 3:
-        #number_of_tags = len(description)
+        # hack: usually element 'description' contains 4 tags (br, br, em, br).
+        # If more, name is in 2- (or more) strings (and tags) of description.
+        # Get it from additional <em> and after it and <br />
         if len(description) > 3:
             for element in description[:-2]:
-                if element.tag == 'em':
+                if element.tag == 'em' and element.text is not None:
                     self.name = self.name + element.text
                     if element.tail is not None:
                         self.name = self.name + element.tail
                 elif element.tag == 'br' and element.tail is not None:
                     self.name = self.name + element.tail
         self.name = self.name.strip()
+        #self.name can include only spaces or cr-lf. if this, get it from url
+        if self.name == '':
+            self.name = self.prewiev_url.rsplit('/', 1)[-1].rsplit('.')[0]
 
-        if 'Dingo' in self.name:
-            print self.name
-
-        #Author in last but one element
-        #TODO: remove author if None
+        #Author is always in last but one element
         if description[len(description) - 2] is not None:
             self.author = description[len(description) - 2].text
         else:
-            self.author = 'Not present in gallery'
+            self.author = 'Failed to get author'
+
+        logging.debug('{0:{width}}'.format(self.name, width=40), self.author)
 
     def get_original_image_url(self):
         """Get information from prewiev page, save it in attributes."""
@@ -123,7 +124,14 @@ site_prefix = 'http://www.australiangeographic.com.au'
 html = urllib.urlopen(url).read()
 doc = lxml.html.document_fromstring(html)
 
-#Parsing command line arguments
+
+#Configure logger
+if __debug__ or args.verbose:
+    logging.basicConfig(level=logging.DEBUG)
+else:
+    logging.basicConfig(level=logging.INFO)
+
+#Parse command line arguments
 parser = argparse.ArgumentParser(description=
     'Download wallpapers from %(url)s'
     'BSD license. Source: https://bitbucket.org/ambush_k3/wp_download'
@@ -147,16 +155,9 @@ if not (args.path.endswith('/') or args.path.endswith('\\')):
 if not exists(args.path):
     mkdir(args.path)
 
-#Configuring logger
-if __debug__ or args.verbose:
-    logging.basicConfig(level=logging.DEBUG)
-else:
-    logging.basicConfig(level=logging.INFO)
-
-page = Image()
 for image in doc.xpath('//*[@id="content"]/table/tr/td/div'):
+    page = Image()
     page.get_data_from_gallery(image)
-    print page.name, page.author
     # FIXME: revert to normal state
     #print page.name
     if 'hkjkj' in page.name:
