@@ -15,6 +15,7 @@ Output:
 """
 #TODO: add exceptions
 #TODO: add thumbnail to exif?
+#TODO: counter of images in gallery and saved images
 
 import urllib
 import urllib2
@@ -76,11 +77,11 @@ class Image():
         else:
             self.author = 'Failed to get author'
 
-        logging.debug('{0:{width}}'.format(self.name, width=40), self.author)
+        logging.debug('%-40s %s' % (self.name, self.author))
 
     def get_original_image_url(self):
         """Get information from prewiev page, save it in attributes."""
-        prewiev_html = urllib.urlopen(self.prewiev_url).read()
+        prewiev_html = urllib2.urlopen(self.prewiev_url).read()
         prewiev_doc = lxml.html.document_fromstring(prewiev_html)
         self.image_url = prewiev_doc.xpath(
                         '//*[@id="content"]/p/a')[0].attrib['href']
@@ -119,17 +120,9 @@ class Image():
         metadata['Exif.Image.Copyright'] = info_to_exif
         metadata.write()
 
+
 url = 'http://www.australiangeographic.com.au/journal/wallpaper'
 site_prefix = 'http://www.australiangeographic.com.au'
-html = urllib.urlopen(url).read()
-doc = lxml.html.document_fromstring(html)
-
-
-#Configure logger
-if __debug__ or args.verbose:
-    logging.basicConfig(level=logging.DEBUG)
-else:
-    logging.basicConfig(level=logging.INFO)
 
 #Parse command line arguments
 parser = argparse.ArgumentParser(description=
@@ -140,6 +133,13 @@ parser.add_argument('-v', '--verbose',
     help='increase output verbosity', action='store_true')
 parser.add_argument('path', help='path to save wallpapers')
 args = parser.parse_args()
+
+#Configure logger
+if __debug__ or not args.verbose:
+    logging.basicConfig(format='%(asctime)s, %(message)s', level=logging.DEBUG)
+    hello_message = 'Started. Arguments: %s %(asctime)s' % args
+else:
+    logging.basicConfig(level=logging.INFO)
 
 #Is given path valid?
 if not abspath(args.path):
@@ -154,13 +154,17 @@ if not (args.path.endswith('/') or args.path.endswith('\\')):
 #Is given path exist?
 if not exists(args.path):
     mkdir(args.path)
+    logging.info('%s created' % args.path)
+
+html = urllib2.urlopen(url).read()
+doc = lxml.html.document_fromstring(html)
 
 for image in doc.xpath('//*[@id="content"]/table/tr/td/div'):
     page = Image()
     page.get_data_from_gallery(image)
     # FIXME: revert to normal state
     #print page.name
-    if 'hkjkj' in page.name:
+    if '' in page.name:
         page.get_original_image_url()
         page.save_image()
         page.edit_exif()
