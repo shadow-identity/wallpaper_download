@@ -24,6 +24,8 @@ import logging
 import argparse
 from os.path import abspath, exists
 from os import mkdir
+from urllib2 import URLError
+from socks import HTTPError
 
 
 class Image():
@@ -137,29 +139,50 @@ args = parser.parse_args()
 #Configure logger
 if __debug__ or not args.verbose:
     logging.basicConfig(format='%(asctime)s, %(message)s', level=logging.DEBUG)
-    hello_message = 'Started. Arguments: %s %(asctime)s' % args
+    hello_message = 'Started. Arguments: %s' % args
 else:
     logging.basicConfig(level=logging.INFO)
+
+logging.info(hello_message)
 
 #Is given path valid?
 if not abspath(args.path):
     logging.error('Path must be absolute!')
+    exit(1)
 if not (args.path.endswith('/') or args.path.endswith('\\')):
+    logging.debug('Fixing path %s' % args.path)
     from sys import platform as _platform
     if _platform.startswith("linux") or _platform == "darwin":
         args.path = args.path + '/'
     elif _platform == "win32" or "cygwin":
         args.path = args.path + '\\'
+    logging.debug('Fixed path: %s' % args.path)
 
-#Is given path exist?
+#Is given path exist? If not - create it
 if not exists(args.path):
-    mkdir(args.path)
-    logging.info('%s created' % args.path)
+    try:
+        mkdir(args.path)
+    except OSError:
+        logging.error('Error creating %s. \
+                       If path is correct, check access rights' % args.path)
+        exit(1)
+    else:
+        logging.info('Created destination path: %s' % args.path)
 
-html = urllib2.urlopen(url).read()
-doc = lxml.html.document_fromstring(html)
+import sys
+try:
+    html = urllib2.urlopen(url + 'df').read()
+    doc = lxml.html.document_fromstring(html)
+    images_table = doc.xpath('//*[@id="content"]/table/tr/td/div/sdfdsf')
+except HTTPError, ex:
+    print ex
+    logging.error('HTTP error %s' % sys.exc_info())
+except URLError, ex:
+    print ex
+    logging.error('Error loading gallery %s' % (sys.exc_info()[0]))
 
-for image in doc.xpath('//*[@id="content"]/table/tr/td/div'):
+for image in images_table:
+    print 'circle'
     page = Image()
     page.get_data_from_gallery(image)
     # FIXME: revert to normal state
