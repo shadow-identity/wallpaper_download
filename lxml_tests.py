@@ -26,6 +26,7 @@ from os.path import abspath, exists
 from os import mkdir
 from urllib2 import URLError
 from socks import HTTPError
+from lxml.html import make_links_absolute
 
 
 class Image():
@@ -48,38 +49,38 @@ class Image():
         image -- ElementTree object containing values
 
         """
-        self.prewiev_url = image[0][0].attrib['href']
-        #hack: make links absolute if they are not
-        if not self.prewiev_url.startswith('http'):
-            self.prewiev_url = site_prefix + self.prewiev_url
-
-        description = image[1]
-        self.name = ''
-        if description.text is not None:
-            self.name = description.text
-        # hack: usually element 'description' contains 4 tags (br, br, em, br).
-        # If more, name is in 2- (or more) strings (and tags) of description.
-        # Get it from additional <em> and after it and <br />
-        if len(description) > 3:
-            for element in description[:-2]:
-                if element.tag == 'em' and element.text is not None:
-                    self.name = self.name + element.text
-                    if element.tail is not None:
+        try:
+            self.prewiev_url = image[0][0].attrib['href']
+            description = image[1]
+            self.name = ''
+            if description.text is not None:
+                self.name = description.text
+            # hack: usually element 'description' contains 4 tags (br, br,
+            # em, br). If more, name is in 2- (or more) strings (and tags) of
+            # description. Get it from additional <em> and after it and <br />
+            if len(description) > 3:
+                for element in description[:-2]:
+                    if element.tag == 'em' and element.text is not None:
+                        self.name = self.name + element.text
+                        if element.tail is not None:
+                            self.name = self.name + element.tail
+                    elif element.tag == 'br' and element.tail is not None:
                         self.name = self.name + element.tail
-                elif element.tag == 'br' and element.tail is not None:
-                    self.name = self.name + element.tail
-        self.name = self.name.strip()
-        #self.name can include only spaces or cr-lf. if this, get it from url
-        if self.name == '':
-            self.name = self.prewiev_url.rsplit('/', 1)[-1].rsplit('.')[0]
+            self.name = self.name.strip()
+            # self.name cant include trailing ' ' or \n. Remove it from url
+            if self.name == '':
+                self.name = self.prewiev_url.rsplit('/', 1)[-1].rsplit('.')[0]
 
-        #Author is always in last but one element
-        if description[len(description) - 2] is not None:
-            self.author = description[len(description) - 2].text
-        else:
-            self.author = 'Failed to get author'
+            #Author is always in last but one element
+            if description[len(description) - 2] is not None:
+                self.author = description[len(description) - 2].text
+            else:
+                self.author = 'Failed to get author'
 
-        logging.debug('%-40s %s' % (self.name, self.author))
+        except IndexError:
+                return error_parsing_gallery
+
+        #logging.debug('%-40s %s' % (self.name, self.author))
 
     def get_original_image_url(self):
         """Get information from prewiev page, save it in attributes."""
@@ -125,6 +126,7 @@ class Image():
 
 url = 'http://www.australiangeographic.com.au/journal/wallpaper'
 site_prefix = 'http://www.australiangeographic.com.au'
+error_parsing_gallery = 'error while parsing gallery'
 
 #Parse command line arguments
 parser = argparse.ArgumentParser(description=
@@ -137,10 +139,11 @@ parser.add_argument('path', help='path to save wallpapers')
 args = parser.parse_args()
 
 #Configure logger
-if __debug__ or not args.verbose:
+if __debug__ or args.verbose:
     logging.basicConfig(format='%(asctime)s, %(message)s', level=logging.DEBUG)
     hello_message = 'Started. Arguments: %s' % args
 else:
+    #TODO: add message type
     logging.basicConfig(level=logging.INFO)
 
 logging.info(hello_message)
@@ -153,9 +156,9 @@ if not (args.path.endswith('/') or args.path.endswith('\\')):
     logging.debug('Fixing path %s' % args.path)
     from sys import platform as _platform
     if _platform.startswith("linux") or _platform == "darwin":
-        args.path = args.path + '/'
+        args.path += '/'
     elif _platform == "win32" or "cygwin":
-        args.path = args.path + '\\'
+        args.path += '\\'
     logging.debug('Fixed path: %s' % args.path)
 
 #Is given path exist? If not - create it
@@ -163,31 +166,48 @@ if not exists(args.path):
     try:
         mkdir(args.path)
     except OSError:
-        logging.error('Error creating %s. \
+        logging.critical('Error creating %s. \
                        If path is correct, check access rights' % args.path)
         exit(1)
     else:
         logging.info('Created destination path: %s' % args.path)
 
-import sys
 try:
-    html = urllib2.urlopen(url + 'df').read()
+    html = urllib2.urlopen(url).read()
     doc = lxml.html.document_fromstring(html)
-    images_table = doc.xpath('//*[@id="content"]/table/tr/td/div/sdfdsf')
+    if doc.make_links_absolute(site_prefix):
+            doc = doc.make_links_absolute(site_prefix)
+    images_table = doc.xpath('//*[@id="content"]/table/tr/td/div')
 except HTTPError, ex:
     print ex
-    logging.error('HTTP error %s' % sys.exc_info())
+    logging.critical('HTTP error %s' % ex)
+    exit(1)
 except URLError, ex:
     print ex
-    logging.error('Error loading gallery %s' % (sys.exc_info()[0]))
-
-for image in images_table:
-    print 'circle'
+    logging.critical('Error loading gallery %s' % ex)
+    exit(1)
+number_images = len(images_table)
+counter = 0
+error_page = []
+error_counter = 0
+for (counter, image) in enumerate(images_table, start=1):
     page = Image()
-    page.get_data_from_gallery(image)
+    if page.get_data_from_gallery(image) == error_parsing_gallery:
+        error_page.append(counter)
+        error_counter += 1
+        continue
     # FIXME: revert to normal state
-    #print page.name
-    if '' in page.name:
+    if 'ffgfg' in page.name:
         page.get_original_image_url()
         page.save_image()
         page.edit_exif()
+
+if error_counter != 0:
+    errors = number_images - error_counter
+    logging.info('There was %(errors)s '
+                 'of %(number_images)s images is not parsed. \
+                  Error pages: %(error_page)s' % locals())
+else:
+    logging.info('All of %(number_images)s images was successfully saved' 
+                 % locals())
+    
