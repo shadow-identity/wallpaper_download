@@ -3,19 +3,16 @@
 Positional argument:
 path -- pathname of destination wallpapers directory
 
-Optional arguments:
+Optional argument:
 -v, --verbose -- affects both log file and stdout
 
 Output:
-- Image files saves into path directory with addition information about site
-  and author (if exist) in Exif.Image.Copyright field.
+- Image files saves into path directory. Thay have addition information
+  about site and author (if exist) in Exif.Image.Copyright field.
 - Log to stdout
-- Log file wp_download.log (more detailed than log in stdout)
 
 """
-#TODO: add exceptions
 #TODO: add thumbnail to exif?
-#TODO: counter of images in gallery and saved images
 
 import urllib
 import urllib2
@@ -33,14 +30,18 @@ class Image():
     """Class containing attributes and methods assigned with image
 
     Attributes
-    self.prewiev_url -- url of prewiev page
+    self.preview_url -- url of preview page
     self.image_url -- url of full image
     self.author -- author of image
     self.name -- full name of image (will be file name)
     self.extention -- file extention of image
     self.filename -- full name destination image file
+    self.error -- non-critical errors flag
 
     """
+
+    def __init__(self):
+        self.error = False
 
     def get_data_from_gallery(self, image):
         """Get useful information about image from gallery, save it in attrs
@@ -50,101 +51,157 @@ class Image():
 
         """
         try:
-            self.prewiev_url = image[0][0].attrib['href']
-            description = image[1]
-            self.name = ''
-            if description.text is not None:
-                self.name = description.text
-            # hack: usually element 'description' contains 4 tags (br, br,
-            # em, br). If more, name is in 2- (or more) strings (and tags) of
-            # description. Get it from additional <em> and after it and <br />
-            if len(description) > 3:
-                for element in description[:-2]:
-                    if element.tag == 'em' and element.text is not None:
-                        self.name = self.name + element.text
-                        if element.tail is not None:
-                            self.name = self.name + element.tail
-                    elif element.tag == 'br' and element.tail is not None:
-                        self.name = self.name + element.tail
-            self.name = self.name.strip()
-            # self.name cant include trailing ' ' or \n. Remove it from url
-            if self.name == '':
-                self.name = self.prewiev_url.rsplit('/', 1)[-1].rsplit('.')[0]
-
-            #Author is always in last but one element
-            if description[len(description) - 2] is not None:
-                self.author = description[len(description) - 2].text
-            else:
-                self.author = 'Failed to get author'
-
+            self.preview_url = image[0][0].attrib['href']
         except IndexError:
-                return error_parsing_gallery
+            # Can't get url of preview page -> skip it
+            return error_parsing_gallery
+        if image[1] is not None:
+            description = image[1]
+        else:
+            #Subelement does not exist - get name from filename and gtfo
+            self.name = self.preview_url.rsplit('/', 1)[-1].rsplit('.')[0]
+            self.author = 'Not present'
+            return
+        self.name = ''
+        if description.text is not None:
+            self.name = description.text
+        # hack: usually element 'description' contains 4 tags (br, br,
+        # em, br). If more, name is in 2- (or more) strings (and tags) of
+        # description. Get it from additional <em> and after it and <br />
+        if len(description) > 3:
+            for element in description[:-2]:
+                if element.tag == 'em' and element.text is not None:
+                    self.name = self.name + element.text
+                    if element.tail is not None:
+                        self.name = self.name + element.tail
+                elif element.tag == 'br' and element.tail is not None:
+                    self.name = self.name + element.tail
+        self.name = self.name.strip()
+        # self.name cant include trailing ' ' or \n. Remove it from url
+        if self.name == '':
+            self.name = self.preview_url.rsplit('/', 1)[-1].rsplit('.')[0]
 
-        #logging.debug('%-40s %s' % (self.name, self.author))
+        #Author is always in last but one element
+        if description[len(description) - 2] is not None:
+            self.author = description[len(description) - 2].text
+        else:
+            self.author = 'Failed to get author'
+        logging.debug('%-50s %-20s %s'
+                      % (self.name, self.author, self.preview_url))
 
     def get_original_image_url(self):
-        """Get information from prewiev page, save it in attributes."""
-        prewiev_html = urllib2.urlopen(self.prewiev_url).read()
-        prewiev_doc = lxml.html.document_fromstring(prewiev_html)
-        self.image_url = prewiev_doc.xpath(
-                        '//*[@id="content"]/p/a')[0].attrib['href']
-        # getting file extention of image from it's url
-        self.extention = '.' + self.image_url.rpartition('.')[2]
+        """Get information from preview page, save it in attributes."""
+
+        try:
+            self.image_url = open_url(
+                self.preview_url, '//*[@id="content"]/p/a')[0].attrib['href']
+        except IndexError:
+            self.error = True
+            return
+        # get file extention of image from it's url
+        if self.image_url is not None:
+            self.extention = '.' + self.image_url.rpartition('.')[2]
 
     def save_image(self):
         """Get path to save, download file and save it to destination."""
-        """try:"""
-
-        #Calculate full filepath, download image, write it to disk
+        image = open_url(self.image_url)
         self.filename = args.path + self.name + self.extention
-        image_pointer = urllib2.urlopen(self.image_url)
-        image = image_pointer.read()
-        with open(self.filename, 'wb') as wallpaper_file:
-            wallpaper_file.write(image)
-        """except urllib2.URLError:
-            logging.error('ERLError while saving img from %s', url)
-        except IOError:
-            logging.error('IOError while saving %s in %s', url, dest)
-        else:"""
-        image_pointer.close
+        if image is not None:
+            try:
+                with open(self.filename, 'wb') as wallpaper_file:
+                    wallpaper_file.write(image)
+            except IOError:
+                logging.error('IOError while saving %s', self.filename)
+                self.error = True
+            else:
+                logging.debug('%s is recorded' % self.filename)
+        else:
+            self.error = True
 
     def edit_exif(self):
         """Manipulations with exif (adding copyright)."""
-        import pyexiv2
+        from pyexiv2.metadata import ImageMetadata
+        from pyexiv2.exif import ExifValueError, ExifTag
+
         info_to_exif = ('File was downloaded from gallery {0}. \n'
                         'URL of image: {1} \n'
                         'Author: {2}'.format(
                                 url, self.image_url, self.author))
-        metadata = pyexiv2.ImageMetadata(self.filename)
-        metadata.read()
-        if 'Exif.Image.Copyright' in metadata:
-            info_to_exif = metadata['Exif.Image.Copyright'].value + '\n' \
-                           + info_to_exif
-        metadata['Exif.Image.Copyright'] = info_to_exif
-        metadata.write()
+        try:
+            metadata = ImageMetadata(self.filename)
+            metadata.read()
+            if 'Exif.Image.Copyright' in metadata:
+                info_to_exif = metadata['Exif.Image.Copyright'].value + '\n' \
+                               + info_to_exif
+            metadata['Exif.Image.Copyright'] = info_to_exif
+            metadata.write()
+        except ExifValueError, info:
+            logging.debug('error parsing Exit. %s' % info)
+            self.error = True
+        except ExifTag, info:
+            logging.debug('error saving Exif. %s' % info)
+            self.error = True
+        except IOError, info:
+            logging.debug('%s' % info)
+            self.error = True
 
+
+def open_url(url, xpath=None, criticality=False):
+    """Returns content of url or tree by xpath (if given).
+    If criticality = 1, program stops
+    """
+    try:
+        content = urllib2.urlopen(url).read()
+        if xpath is not None:
+            doc = lxml.html.document_fromstring(content)
+            if doc.make_links_absolute(site_prefix):
+                doc = doc.make_links_absolute(site_prefix)
+            tree = doc.xpath(xpath)
+            return tree
+        else:
+            return content
+    except HTTPError, info:
+        if criticality == 1:
+            logging.critical('Critical HTTP error %s' % info)
+            exit(1)
+        else:
+            logging.error('HTTP error %s' % info)
+    except URLError, info:
+        if criticality == 1:
+            logging.critical('Critical error while loading url. %s' % info)
+            exit(1)
+        else:
+            logging.error('Error while loading %s' % info)
+    except IndexError, info:
+        if criticality == True:
+            logging.critical('HTML structure error in %s. \n %s' % (url, info))
+            exit(1)
+        else:
+            logging.error('%s' % info)
 
 url = 'http://www.australiangeographic.com.au/journal/wallpaper'
 site_prefix = 'http://www.australiangeographic.com.au'
 error_parsing_gallery = 'error while parsing gallery'
+error_saving_file = 'error while downloading or saving image'
 
 #Parse command line arguments
 parser = argparse.ArgumentParser(description=
     'Download wallpapers from %(url)s'
     'BSD license. Source: https://bitbucket.org/ambush_k3/wp_download'
     % locals())
-parser.add_argument('-v', '--verbose',
-    help='increase output verbosity', action='store_true')
 parser.add_argument('path', help='path to save wallpapers')
+parser.add_argument('-v', '--verbose', help='increase output verbosity',
+                    action='store_true')
 args = parser.parse_args()
 
 #Configure logger
-if __debug__ or args.verbose:
-    logging.basicConfig(format='%(asctime)s, %(message)s', level=logging.DEBUG)
+if args.verbose == True:
+    logging.basicConfig(format='[LINE:%(lineno)-3d]# '\
+        '%(levelname)-8s [%(asctime)s]  %(message)s', level=logging.DEBUG)
     hello_message = 'Started. Arguments: %s' % args
 else:
-    #TODO: add message type
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(format='%(asctime)s %(message)s ', level=logging.INFO)
+    hello_message = 'Started. Arguments: %s' % args
 
 logging.info(hello_message)
 
@@ -172,42 +229,37 @@ if not exists(args.path):
     else:
         logging.info('Created destination path: %s' % args.path)
 
-try:
-    html = urllib2.urlopen(url).read()
-    doc = lxml.html.document_fromstring(html)
-    if doc.make_links_absolute(site_prefix):
-            doc = doc.make_links_absolute(site_prefix)
-    images_table = doc.xpath('//*[@id="content"]/table/tr/td/div')
-except HTTPError, ex:
-    print ex
-    logging.critical('HTTP error %s' % ex)
-    exit(1)
-except URLError, ex:
-    print ex
-    logging.critical('Error loading gallery %s' % ex)
-    exit(1)
+images_table = open_url(url, '//*[@id="content"]/table/tr/td/div', 1)
 number_images = len(images_table)
-counter = 0
-error_page = []
 error_counter = 0
+
 for (counter, image) in enumerate(images_table, start=1):
     page = Image()
     if page.get_data_from_gallery(image) == error_parsing_gallery:
-        error_page.append(counter)
         error_counter += 1
         continue
-    # FIXME: revert to normal state
-    if 'ffgfg' in page.name:
-        page.get_original_image_url()
-        page.save_image()
-        page.edit_exif()
+    if page.preview_url is None:
+        error_counter += 1
+        continue
+    page.get_original_image_url()
+    if page.image_url is None or page.error == True:
+        error_counter += 1
+        continue
+    page.save_image()
+    if page.error == True:
+        error_counter += 1
+        continue
+    page.edit_exif()
+    if page.error == True:
+        error_counter += 1
+        continue
+    logging.debug((page.error, page.filename, page.extention,
+                   page.image_url))
 
 if error_counter != 0:
     errors = number_images - error_counter
     logging.info('There was %(errors)s '
-                 'of %(number_images)s images is not parsed. \
-                  Error pages: %(error_page)s' % locals())
+                 'of %(number_images)s images is not parsed.' % locals())
 else:
-    logging.info('All of %(number_images)s images was successfully saved' 
+    logging.info('All of %(number_images)s images was successfully saved'
                  % locals())
-    
