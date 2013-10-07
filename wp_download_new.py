@@ -1,3 +1,4 @@
+#!/bin/python
 # -*- coding: utf-8 -*-
 """Download wallpapers from www.australiangeographic.com.au
 Positional argument:
@@ -13,17 +14,17 @@ Output:
 
 """
 #TODO: add thumbnail to exif?
+#TODO: using context manager
 
-import urllib
 import urllib2
-import lxml.html
 import logging
 import argparse
 from os.path import abspath, exists
 from os import mkdir
 from urllib2 import URLError
+
+import lxml.html
 from socks import HTTPError
-from lxml.html import make_links_absolute
 
 
 class Image():
@@ -34,7 +35,7 @@ class Image():
     self.image_url -- url of full image
     self.author -- author of image
     self.name -- full name of image (will be file name)
-    self.extention -- file extention of image
+    self.extension -- file extension of image
     self.filename -- full name destination image file
     self.error -- non-critical errors flag
 
@@ -65,7 +66,7 @@ class Image():
         self.name = ''
         if description.text is not None:
             self.name = description.text
-        # hack: usually element 'description' contains 4 tags (br, br,
+            # hack: usually element 'description' contains 4 tags (br, br,
         # em, br). If more, name is in 2- (or more) strings (and tags) of
         # description. Get it from additional <em> and after it and <br />
         if len(description) > 3:
@@ -98,18 +99,18 @@ class Image():
         except IndexError:
             self.error = True
             return
-        # get file extention of image from it's url
+            # get file extension of image from it's url
         if self.image_url is not None:
-            self.extention = '.' + self.image_url.rpartition('.')[2]
+            self.extension = '.' + self.image_url.rpartition('.')[2]
 
     def save_image(self):
         """Get path to save, download file and save it to destination."""
-        image = open_url(self.image_url)
-        self.filename = args.path + self.name + self.extention
-        if image is not None:
+        image_file = open_url(self.image_url)
+        self.filename = args.path + self.name + self.extension
+        if image_file is not None:
             try:
                 with open(self.filename, 'wb') as wallpaper_file:
-                    wallpaper_file.write(image)
+                    wallpaper_file.write(image_file)
             except IOError:
                 logging.error('IOError while saving %s', self.filename)
                 self.error = True
@@ -126,13 +127,12 @@ class Image():
         info_to_exif = ('File was downloaded from gallery {0}. \n'
                         'URL of image: {1} \n'
                         'Author: {2}'.format(
-                                url, self.image_url, self.author))
+            url, self.image_url, self.author))
         try:
             metadata = ImageMetadata(self.filename)
             metadata.read()
             if 'Exif.Image.Copyright' in metadata:
-                info_to_exif = metadata['Exif.Image.Copyright'].value + '\n' \
-                               + info_to_exif
+                info_to_exif = metadata['Exif.Image.Copyright'].value + '\n' + info_to_exif
             metadata['Exif.Image.Copyright'] = info_to_exif
             metadata.write()
         except ExifValueError, info:
@@ -173,11 +173,12 @@ def open_url(url, xpath=None, criticality=False):
         else:
             logging.error('Error while loading %s' % info)
     except IndexError, info:
-        if criticality == True:
+        if criticality:
             logging.critical('HTML structure error in %s. \n %s' % (url, info))
             exit(1)
         else:
             logging.error('%s' % info)
+
 
 url = 'http://www.australiangeographic.com.au/journal/wallpaper'
 site_prefix = 'http://www.australiangeographic.com.au'
@@ -185,19 +186,18 @@ error_parsing_gallery = 'error while parsing gallery'
 error_saving_file = 'error while downloading or saving image'
 
 #Parse command line arguments
-parser = argparse.ArgumentParser(description=
-    'Download wallpapers from %(url)s'
-    'BSD license. Source: https://bitbucket.org/ambush_k3/wp_download'
-    % locals())
+parser = argparse.ArgumentParser(
+    description='Download wallpapers from %(url)s BSD license. \
+    Source: https://bitbucket.org/ambush_k3/wp_download' % locals())
 parser.add_argument('path', help='path to save wallpapers')
 parser.add_argument('-v', '--verbose', help='increase output verbosity',
                     action='store_true')
 args = parser.parse_args()
 
 #Configure logger
-if args.verbose == True:
-    logging.basicConfig(format='[LINE:%(lineno)-3d]# '\
-        '%(levelname)-8s [%(asctime)s]  %(message)s', level=logging.DEBUG)
+if args.verbose:
+    logging.basicConfig(format='[LINE:%(lineno)-3d]# ' \
+                               '%(levelname)-8s [%(asctime)s]  %(message)s', level=logging.DEBUG)
     hello_message = 'Started. Arguments: %s' % args
 else:
     logging.basicConfig(format='%(asctime)s %(message)s ', level=logging.INFO)
@@ -212,6 +212,7 @@ if not abspath(args.path):
 if not (args.path.endswith('/') or args.path.endswith('\\')):
     logging.debug('Fixing path %s' % args.path)
     from sys import platform as _platform
+
     if _platform.startswith("linux") or _platform == "darwin":
         args.path += '/'
     elif _platform == "win32" or "cygwin":
@@ -229,7 +230,7 @@ if not exists(args.path):
     else:
         logging.info('Created destination path: %s' % args.path)
 
-images_table = open_url(url, '//*[@id="content"]/table/tr/td/div', 1)
+images_table = open_url(url, '//*[@id="content"]/table/tr/td/div', True)
 number_images = len(images_table)
 error_counter = 0
 
@@ -242,18 +243,18 @@ for (counter, image) in enumerate(images_table, start=1):
         error_counter += 1
         continue
     page.get_original_image_url()
-    if page.image_url is None or page.error == True:
+    if page.image_url is None or page.error:
         error_counter += 1
         continue
     page.save_image()
-    if page.error == True:
+    if page.error:
         error_counter += 1
         continue
     page.edit_exif()
-    if page.error == True:
+    if page.error:
         error_counter += 1
         continue
-    logging.debug((page.error, page.filename, page.extention,
+    logging.debug((page.error, page.filename, page.extension,
                    page.image_url))
 
 if error_counter != 0:
