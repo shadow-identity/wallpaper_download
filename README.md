@@ -3,11 +3,7 @@ wallpaper_download
 
 Downloads wallpapers in full resolution from http://www.australiangeographic.com.au and store it to local storage
 
-Positional argument:
-path -- pathname of destination wallpapers directory
-
-Optional argument:
--v, --verbose -- affects both log file and stdout
+use ./wp_download.py --help
 
 Output:
 - Image files saves into path directory. They have addition information

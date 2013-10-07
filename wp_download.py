@@ -6,6 +6,7 @@ path -- pathname of destination wallpapers directory
 
 Optional argument:
 -v, --verbose -- affects both log file and stdout
+-r, --rewrite -- rewrite existing file (else skip them)
 
 Output:
 - Image files saves into path directory. They have addition information
@@ -105,19 +106,23 @@ class Image():
 
     def save_image(self):
         """Get path to save, download file and save it to destination."""
-        image_file = open_url(self.image_url)
         self.filename = args.path + self.name + self.extension
-        if image_file is not None:
-            try:
-                with open(self.filename, 'wb') as wallpaper_file:
-                    wallpaper_file.write(image_file)
-            except IOError:
-                logging.error('IOError while saving %s', self.filename)
-                self.error = True
+        if exists(self.filename) and args.rewrite:
+            image_file = open_url(self.image_url)
+
+            if image_file is not None:
+                try:
+                    with open(self.filename, 'wb') as wallpaper_file:
+                        wallpaper_file.write(image_file)
+                except IOError:
+                    logging.error('IOError while saving %s', self.filename)
+                    self.error = True
+                else:
+                    logging.debug('recorded %s' % self.filename)
             else:
-                logging.debug('%s is recorded' % self.filename)
+                self.error = True
         else:
-            self.error = True
+            logging.debug('skipping existing file %s' % self.filename)
 
     def edit_exif(self):
         """Manipulations with exif (adding copyright)."""
@@ -188,10 +193,12 @@ error_saving_file = 'error while downloading or saving image'
 #Parse command line arguments
 parser = argparse.ArgumentParser(
     description='Download wallpapers from %(url)s BSD license. \
-    Source: https://bitbucket.org/ambush_k3/wp_download' % locals())
+    Source: https://bitbucket.org/ambush_k3/wp_download or \
+    https://github.com/shadow-identity/wallpaper_download' % locals())
 parser.add_argument('path', help='path to save wallpapers')
 parser.add_argument('-v', '--verbose', help='increase output verbosity',
                     action='store_true')
+parser.add_argument('-r', '--rewrite', help='rewrite existing files', action='store_true')
 args = parser.parse_args()
 
 #Configure logger
